@@ -1,8 +1,11 @@
 // Agent Draw — mint website logic (read-only by default, wallet only for mint/claim/draw).
-// Contract: AgentDraw 0xdC167f998341aA37D734de94db2108F0983bf2A7 on BSC (chain 56).
-// v2 deployed 17 Nov 2026. Period 1 ends Fri 20 Nov 2026 15:46 WIB (unix 1795164400).
+// Live contract: AgentDraw v2 0xdC167f998341aA37D734de94db2108F0983bf2A7 on BSC (chain 56).
+// v2 deployed 17 Nov 2026. Period 1 ends Fri 20 Nov 2026 15:12 WIB (unix 1795162352).
+// First contract v1 0x1Db77327a7025Fc493DECD7Dba4CBf44f4e42543 is superseded but still
+// live on-chain; the board below shows both contracts combined as one.
 
 const CONTRACT_ADDRESS = '0xdC167f998341aA37D734de94db2108F0983bf2A7';
+const V1_CONTRACT_ADDRESS = '0x1Db77327a7025Fc493DECD7Dba4CBf44f4e42543';
 const AGENT_ID_ADDRESS = '0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F';
 const DEPLOY_BLOCK = 134085445;
 const BSC_CHAIN_ID = 56;
@@ -23,7 +26,6 @@ const AGENT_DRAW_ABI = [
   'function ticketPrice() view returns (uint256)',
   'function drawThreshold() view returns (uint256)',
   'function cutActivation() view returns (uint256)',
-  'function ticketsSold() view returns (uint256)',
   'function freeMinted() view returns (uint256)',
   'function FREE_TICKET_SUPPLY() view returns (uint256)',
   'function hasClaimedFree(address) view returns (bool)',
@@ -89,42 +91,83 @@ const MULTICALL_ADDRESS = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const MULTICALL_ABI = ['function aggregate((address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)'];
 // The nine board values, read in ONE eth_call via Multicall3 (a single call
 // is far more reliable than nine parallel calls on throttled public RPCs).
-const BOARD_FNS = ['pool', 'periodId', 'periodEnd', 'ticketPrice', 'drawThreshold', 'cutActivation', 'freeMinted', 'FREE_TICKET_SUPPLY', 'totalSupply'];
+const BOARD_FNS = ['pool', 'periodId', 'periodEnd', 'ticketPrice', 'drawThreshold', 'cutActivation', 'freeMinted', 'FREE_TICKET_SUPPLY'];
+
+// Two contracts, one board: v1 (first deploy) + v2 (live). Additive values
+// (pool, free tickets, supply, tickets) are summed; the draw schedule
+// (period, price, threshold) comes from v2, the live contract.
+// NOTE: the contract has no totalSupply()/ticketsSold() (plain ERC721, no
+// Enumerable). Total tickets is derived exactly: every paid mint adds exactly
+// ticketPrice to the pool and free mints add nothing, so
+// paid = pool / ticketPrice and tickets = freeMinted + paid. Exact until the
+// first draw/sweep cycle moves other value into the pool.
+function combineBoard(v1, v2) {
+  const tickets = (r) => r.freeMinted + (r.ticketPrice > 0n ? r.pool / r.ticketPrice : 0n);
+  return {
+    pool: v1.pool + v2.pool,
+    periodId: v2.periodId,
+    periodEnd: v2.periodEnd,
+    ticketPrice: v2.ticketPrice,
+    drawThreshold: v2.drawThreshold,
+    cutActivation: v2.cutActivation,
+    freeMinted: v1.freeMinted + v2.freeMinted,
+    FREE_TICKET_SUPPLY: v1.FREE_TICKET_SUPPLY + v2.FREE_TICKET_SUPPLY,
+    ticketsSold: tickets(v1) + tickets(v2),
+    v1Free: v1.freeMinted, v2Free: v2.freeMinted,
+    v1Sold: tickets(v1), v2Sold: tickets(v2),
+    v2pool: v2.pool, v2freeMinted: v2.freeMinted, v2freeSupply: v2.FREE_TICKET_SUPPLY,
+  };
+}
 
 async function readBoardState() {
+  const iface = new ethers.Interface(AGENT_DRAW_ABI);
+  const addrs = [V1_CONTRACT_ADDRESS, CONTRACT_ADDRESS];
   try {
-    const iface = new ethers.Interface(AGENT_DRAW_ABI);
-    const calls = BOARD_FNS.map((fn) => ({ target: CONTRACT_ADDRESS, callData: iface.encodeFunctionData(fn, []) }));
+    const calls = addrs.flatMap((target) =>
+      BOARD_FNS.map((fn) => ({ target, callData: iface.encodeFunctionData(fn, []) })));
     const multi = new ethers.Contract(MULTICALL_ADDRESS, MULTICALL_ABI, readProvider);
     const [, results] = await multi.aggregate(calls);
-    const out = {};
-    BOARD_FNS.forEach((fn, i) => { out[fn] = iface.decodeFunctionResult(fn, results[i])[0]; });
-    return out;
+    const reads = addrs.map((_, c) => {
+      const out = {};
+      BOARD_FNS.forEach((fn, i) => { out[fn] = iface.decodeFunctionResult(fn, results[c * BOARD_FNS.length + i])[0]; });
+      return out;
+    });
+    return combineBoard(reads[0], reads[1]);
   } catch (e) {
     // Fallback: individual calls (works when Multicall3 is unavailable).
-    const [pool, periodId, periodEnd, price, threshold, cutAct, freeMinted, freeSupply, sold] =
-      await Promise.all([
-        contract.pool(), contract.periodId(), contract.periodEnd(), contract.ticketPrice(),
-        contract.drawThreshold(), contract.cutActivation(), contract.freeMinted(),
-        contract.FREE_TICKET_SUPPLY(), contract.totalSupply(),
-      ]);
-    return { pool, periodId, periodEnd, ticketPrice: price, drawThreshold: threshold,
-      cutActivation: cutAct, freeMinted, FREE_TICKET_SUPPLY: freeSupply, ticketsSold: sold };
+    const one = async (addr) => {
+      const c = new ethers.Contract(addr, AGENT_DRAW_ABI, readProvider);
+      const [pool, periodId, periodEnd, price, threshold, cutAct, freeMinted, freeSupply] =
+        await Promise.all([
+          c.pool(), c.periodId(), c.periodEnd(), c.ticketPrice(),
+          c.drawThreshold(), c.cutActivation(), c.freeMinted(),
+          c.FREE_TICKET_SUPPLY(),
+        ]);
+      return { pool, periodId, periodEnd, ticketPrice: price, drawThreshold: threshold,
+        cutActivation: cutAct, freeMinted, FREE_TICKET_SUPPLY: freeSupply };
+    };
+    const [v1, v2] = await Promise.all([one(V1_CONTRACT_ADDRESS), one(CONTRACT_ADDRESS)]);
+    return combineBoard(v1, v2);
   }
 }
 
 async function refreshBoard() {
   if (!contract) return;
   try {
-    const { pool, periodId, periodEnd, ticketPrice: price, drawThreshold: threshold, cutActivation: cutAct, freeMinted, FREE_TICKET_SUPPLY: freeSupply, ticketsSold: sold } =
+    const { pool, periodId, periodEnd, ticketPrice: price, drawThreshold: threshold, cutActivation: cutAct, freeMinted, FREE_TICKET_SUPPLY: freeSupply, ticketsSold: sold,
+      v1Free, v2Free, v1Sold, v2Sold, v2pool, v2freeMinted, v2freeSupply } =
       await readBoardState();
+    // state keeps V2-only values: the wallet logic (free button, mint caps)
+    // runs against the live contract. The board above shows both combined.
     state = { periodEnd: Number(periodEnd), periodId: Number(periodId), ticketPrice: price,
-      drawThreshold: threshold, freeMinted, freeSupply, pool };
+      drawThreshold: threshold, freeMinted: v2freeMinted, freeSupply: v2freeSupply, pool: v2pool };
 
     $('period-id').textContent = periodId;
     $('pool').textContent = fmtBNB(pool) + ' BNB';
     $('tickets-sold').textContent = sold.toString();
+    $('tickets-sub').textContent = 'v2: ' + v2Sold.toString() + ' · v1: ' + v1Sold.toString() + ' — only v2 tickets enter the draw';
     $('free-minted').textContent = freeMinted.toString() + ' / ' + freeSupply.toString();
+    $('free-sub').textContent = 'v2: ' + v2Free.toString() + ' · v1: ' + v1Free.toString() + ' — 1000 free per contract';
     $('period-end-label').textContent = 'period ends ' + fmtWIB(Number(periodEnd));
     $('threshold-text').textContent =
       'Draw runs when the pool reaches ' + fmtBNB(threshold) + ' BNB. ' +
