@@ -165,9 +165,13 @@ async function refreshBoard() {
     $('period-id').textContent = periodId;
     $('pool').textContent = fmtBNB(pool) + ' BNB';
     $('tickets-sold').textContent = sold.toString();
-    $('tickets-sub').textContent = 'v2: ' + v2Sold.toString() + ' · v1: ' + v1Sold.toString() + ' — only v2 tickets enter the draw';
+    // Sub-elements may be missing in a stale cached index.html — guard so a
+    // mixed old-HTML/new-JS cache state cannot break the whole board.
+    const ticketsSub = $('tickets-sub');
+    if (ticketsSub) ticketsSub.textContent = 'v2: ' + v2Sold.toString() + ' · v1: ' + v1Sold.toString() + ' — only v2 tickets enter the draw';
     $('free-minted').textContent = freeMinted.toString() + ' / ' + freeSupply.toString();
-    $('free-sub').textContent = 'v2: ' + v2Free.toString() + ' · v1: ' + v1Free.toString() + ' — 1000 free per contract';
+    const freeSub = $('free-sub');
+    if (freeSub) freeSub.textContent = 'v2: ' + v2Free.toString() + ' · v1: ' + v1Free.toString() + ' — 1000 free per contract';
     $('period-end-label').textContent = 'period ends ' + fmtWIB(Number(periodEnd));
     $('threshold-text').textContent =
       'Draw runs when the pool reaches ' + fmtBNB(threshold) + ' BNB. ' +
