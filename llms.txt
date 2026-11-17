@@ -1,0 +1,98 @@
+# Agent Draw
+
+> Agent Draw is a daily BNB raffle for Agent ID holders on BNB Smart Chain.
+> Tickets cost 0.00005 BNB. The first 1000 tickets are free (1 per wallet).
+> 100% of ticket fees fund the prize pool — no seed money, no pre-sale.
+> One draw per period: 1 main winner + 5 small winners. Winners claim on the website.
+
+## Contract
+
+- Network: BNB Smart Chain (chain 56)
+- Contract: AgentDraw `0xdC167f998341aA37D734de94db2108F0983bf2A7`- Contract: AgentDraw `0xdC167f998341aA37D734de94db2108F0983bf2A7`
+- Deploy tx: `0x7f868f7978ef7772832a69e71593711be61a10f386c5e8d404e59ce2f16a9299`
+- Deploy block: 134085445
+- Verified on Sourcify (exact match) and BscScan: https://bscscan.com/address/0xdC167f998341aA37D734de94db2108F0983bf2A7
+- Agent ID gate: SPACE ID Agent ID NFT `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F`.
+  An Agent ID is required ONLY for the free ticket. Paid tickets are open to
+  everyone — no Agent ID needed.
+- Ticket NFT: ERC-721, name "Agent Draw Ticket", symbol "ADRAW"
+- Contract status: the live contract (v1) still requires an Agent ID for ALL
+  mints. A v2 contract that opens paid tickets to everyone is being deployed;
+  until the v2 address is published here, paid mints from wallets without an
+  Agent ID will revert on-chain. Check the contract address above — this file
+  is updated when v2 goes live.
+
+## Rules
+
+- Ticket price: 0.00005 BNB (~Rp 490). Exact payment required.
+- Free tickets: the first 1000 tickets of the project are free — 1 per wallet,
+  for the lifetime of the project (`mintFreeTicket`). An Agent ID is required
+  to claim a free ticket. A free ticket still counts as one draw entry but
+  adds nothing to the prize pool.
+- Paid tickets: open to EVERYONE — no Agent ID needed (`mintTicket`). Anyone
+  can buy up to 10 paid tickets per wallet per period.
+- Max 10 paid tickets per wallet per period (free ticket does not use this quota).
+- Period 1 lasts 3 days from deployment and ends Fri 20 Nov 2026 15:46 WIB
+  (unix 1795164400, read live from the contract). Later periods last 24h and close at 16:00 WIB.
+- Draw gate: the draw runs only when the pool is at least 0.005 BNB. If the
+  pool is below that at period end, the period extends 24h and the pool keeps
+  growing. Anyone can call `draw()` — it is permissionless.
+- Prizes per period: 1 main winner + 5 small winners.
+  - While the project cut is inactive (period pool below 0.05 BNB), 100% of the
+    pool goes to winners: ~77.78% to the main winner, ~4.44% to each small winner.
+  - Once a period pool reaches 0.05 BNB, the split is 70% main / 4% per small
+    winner / 10% project cut.
+  - Integer-division dust (a few wei) rolls into the next period's pool.
+- Randomness: winners are picked from the blockhash of the closing block mixed
+  with the period id and pool. This is NOT Chainlink VRF. A block proposer can
+  influence it slightly; the trade-off is accepted for small prize pools. If a
+  period pool ever exceeds ~1 BNB/day, the draw will be upgraded to Chainlink VRF.
+- Claims are pull-based: winners call `claim(tokenId)` within 7 days of the draw.
+  Unclaimed prizes can be swept back into the current pool by anyone after 7 days
+  via `sweepUnclaimed(tokenId)`.
+- Owner powers are minimal: ticket price (bounded 0.00001–0.0001 BNB), draw
+  threshold, cut-activation level. The owner can never withdraw the prize pool
+  or mint free tickets.
+
+## How to mint (user)
+
+1. Open the Agent Draw website and connect a wallet on BNB Smart Chain.
+2. To claim your one free ticket, you must hold an Agent ID (SPACE ID).
+   Paid tickets need no Agent ID — anyone can buy.
+3. Claim your one free ticket (button "Claim FREE Ticket") while the 1000-ticket
+   free supply lasts, or buy tickets (button "Buy Ticket(s)", 1–10, each
+   0.00005 BNB — each ticket is a separate transaction).
+4. After the draw, winners claim their prize from the "My Tickets" section.
+
+## How to interact (agent / developer)
+
+- Read the live board with view calls: `pool()`, `periodId()`, `periodEnd()`,
+  `timeLeft()`, `ticketPrice()`, `drawThreshold()`, `cutActivation()`,
+  `freeMinted()`, `FREE_TICKET_SUPPLY()`, `ticketsSold()`.
+- Mint paid: `mintTicket()` payable, value exactly `ticketPrice()` (one ticket per call).
+  Paid tickets are open to everyone — no Agent ID needed (v2 rule; see the
+  contract-status note above — the live v1 contract still enforces the Agent ID
+  gate until v2 is deployed).
+- Mint free: `mintFreeTicket()` payable with value 0 (reverts if the wallet
+  already claimed its free ticket or the 1000 supply is exhausted). Requires
+  holding an Agent ID.
+- Draw: `draw()` after `periodEnd()`; extends the period by 24h if the pool is
+  below `drawThreshold()`.
+- Claim: `claim(tokenId)` by the ticket owner within 7 days of the draw.
+- History: `Drawn` / `Claimed` / `TicketMinted` / `FreeTicketMinted` events from
+  block 134085445.
+- Full ABI: see the contract source and build artifacts in the project repo
+  (`src/AgentDraw.sol`, Sourcify exact match).
+
+## Website
+
+- Mint site: `index.html` + `app.js` + `style.css` in this folder (static, no backend).
+- Reads the contract via public BSC RPC. Wallet (MetaMask / injected provider)
+  is only needed to mint, claim, or draw — never to view the board.
+- Logo: `assets/agent-draw-logo.png` (with wordmark), `assets/agent-draw-icon.png` (icon only).
+
+## Honest notes
+
+- The prize pool is 100% funded by ticket fees. If few people play, prizes are small.
+- The project cut is 0% until a period pool reaches 0.05 BNB.
+- Agent Draw is a raffle, not an investment. Play only what you can afford to lose.

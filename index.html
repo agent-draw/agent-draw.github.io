@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Draw — Daily BNB Raffle for Agent ID Holders</title>
+<meta name="description" content="Agent Draw is a daily BNB raffle for Agent ID holders. Tickets cost 0.00005 BNB, the first 1000 tickets are free (1 per wallet), and 100% of ticket fees fund the prize pool. Draws run daily at 16:00 WIB on BNB Smart Chain.">
+<link rel="icon" type="image/png" href="assets/agent-draw-icon.png">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <img src="assets/agent-draw-logo.png" alt="Agent Draw logo" class="logo">
+    <div>
+      <h1>Agent Draw</h1>
+      <p class="tagline">Daily BNB raffle for Agent ID holders</p>
+    </div>
+    <div class="header-right">
+      <span id="network-badge" class="badge">BSC · not connected</span>
+      <button id="connect-btn" class="btn btn-gold">Connect Wallet</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <p id="rpc-status" class="status-line">Connecting to BNB Smart Chain…</p>
+
+  <!-- LIVE BOARD -->
+  <section class="card board" aria-label="Live raffle board">
+    <h2>Live Board — Period <span id="period-id">…</span></h2>
+    <div class="stats">
+      <div class="stat big">
+        <span class="label">Prize pool</span>
+        <span class="value" id="pool">…</span>
+        <span class="sub" id="pool-sub">BNB</span>
+      </div>
+      <div class="stat">
+        <span class="label">Tickets sold this period</span>
+        <span class="value" id="tickets-sold">…</span>
+        <span class="sub" id="tickets-sub">entries in the draw</span>
+      </div>
+      <div class="stat">
+        <span class="label">Free tickets claimed</span>
+        <span class="value" id="free-minted">…</span>
+        <span class="sub">of 1000 free for the whole project</span>
+      </div>
+      <div class="stat">
+        <span class="label">Draw in</span>
+        <span class="value" id="countdown">…</span>
+        <span class="sub" id="period-end-label">period ends —</span>
+      </div>
+    </div>
+    <div class="threshold">
+      <span id="threshold-text">Draw runs when the pool reaches 0.005 BNB. Below that, the period extends 24h.</span>
+      <div class="progress"><div id="pool-progress" class="progress-fill" style="width:0%"></div></div>
+    </div>
+    <p class="fineprint">Ticket price <strong>0.00005 BNB</strong> · Max <strong>10 tickets per wallet per period</strong> · Draw threshold <strong>0.005 BNB</strong></p>
+    <div id="draw-box" class="draw-box hidden">
+      <p>The period has ended. Anyone can trigger the draw — it costs only gas.</p>
+      <button id="draw-btn" class="btn btn-gold">Run the Draw</button>
+      <span id="draw-status" class="tx-status"></span>
+    </div>
+  </section>
+
+  <!-- MINT -->
+  <section class="card" aria-label="Get tickets">
+    <h2>Get Tickets</h2>
+    <div id="wallet-panel">
+      <p class="muted">Connect your wallet to mint. <strong>Free tickets require an Agent ID</strong> (SPACE ID). <strong>Paid tickets are open to everyone</strong> — no Agent ID needed.</p>
+    </div>
+    <div id="gate-panel" class="hidden">
+      <p>Wallet: <code id="wallet-address">—</code></p>
+      <p>Agent ID: <span id="agent-id-status" class="badge">checking…</span> <span class="muted small">(only needed for the free ticket)</span></p>
+      <p>Free ticket: <span id="free-status">—</span></p>
+      <div class="mint-row">
+        <button id="free-btn" class="btn btn-gold" disabled>Claim FREE Ticket</button>
+        <span class="muted small">1 free ticket per wallet, while the 1000-ticket free supply lasts. Agent ID required. Free tickets still count as a draw entry but add nothing to the pool.</span>
+      </div>
+      <div class="mint-row">
+        <label for="qty">Tickets:</label>
+        <input id="qty" type="number" min="1" max="10" value="1">
+        <button id="buy-btn" class="btn btn-gold" disabled>Buy Ticket(s)</button>
+        <span id="buy-cost" class="muted">Cost: 0.00005 BNB</span>
+      </div>
+      <p class="muted small">Paid tickets are open to everyone — no Agent ID needed. Max 10 per wallet per period.</p>
+      <p id="mint-status" class="tx-status"></p>
+      <p class="muted small">Each paid ticket is a separate on-chain mint, so buying 3 tickets sends 3 transactions, one after another. Your wallet will ask you to confirm each one.</p>
+    </div>
+  </section>
+
+  <!-- MY TICKETS -->
+  <section class="card hidden" id="my-tickets-section" aria-label="My tickets">
+    <h2>My Tickets — This Period</h2>
+    <div id="my-tickets"><p class="muted">Loading…</p></div>
+  </section>
+
+  <!-- WINNERS -->
+  <section class="card" aria-label="Winners history">
+    <h2>Winners</h2>
+    <div id="winners"><p class="muted">Loading past draws…</p></div>
+  </section>
+
+  <!-- RULES -->
+  <section class="card" aria-label="Rules">
+    <h2>How It Works</h2>
+    <ul class="rules">
+      <li><strong>No-capital pool.</strong> 100% of the prize pool comes from ticket fees. No seed money, no pre-sale — the pool is exactly what players paid in.</li>
+      <li><strong>Tickets.</strong> 1 ticket = 0.00005 BNB, 1 ticket = 1 draw entry. Tickets are NFTs (ERC-721). <strong>Free tickets require an Agent ID</strong> (SPACE ID) — 1 free ticket per wallet while the 1000-ticket free supply lasts. <strong>Paid tickets are open to everyone</strong> — no Agent ID needed. Max 10 paid tickets per wallet per period.</li>
+      <li><strong>First 1000 tickets free.</strong> The first 1000 tickets of the project are free — 1 per wallet, for the lifetime of the project. Free tickets still enter the draw but add nothing to the pool.</li>
+      <li><strong>Draw.</strong> Every period closes at 16:00 WIB. The draw runs only when the pool is at least 0.005 BNB; if the pool is below that, the period extends 24 hours and the pool keeps growing. Anyone can trigger the draw.</li>
+      <li><strong>Prizes.</strong> 1 main winner and 5 small winners per period. While the project cut is inactive (pool below 0.05 BNB), 100% of the pool goes to winners: ~77.78% to the main winner and ~4.44% to each small winner. Once a period pool reaches 0.05 BNB, the split is 70% main / 4% per small winner / 10% project cut.</li>
+      <li><strong>Randomness — honest note.</strong> Winners are picked from the blockhash of the closing block. This is <strong>not Chainlink VRF</strong>: a block proposer can influence it slightly. That trade-off is accepted for small prize pools; if pools grow past ~1 BNB per day, the draw will be upgraded to Chainlink VRF.</li>
+      <li><strong>Claiming.</strong> Winners claim their prize themselves from this page. Unclaimed prizes roll back into the next period's pool after 7 days.</li>
+      <li><strong>Verified on-chain.</strong> Contract <a id="contract-link" href="#" target="_blank" rel="noopener">AgentDraw on BscScan</a> — every ticket, draw, and claim is public.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>Agent Draw — a daily BNB raffle for Agent ID holders. Contract: <a id="contract-link-footer" href="#" target="_blank" rel="noopener">0xdC167f998341aA37D734de94db2108F0983bf2A7</a> (BSC). Play only what you can afford to lose.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
