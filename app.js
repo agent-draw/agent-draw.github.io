@@ -89,7 +89,7 @@ const MULTICALL_ADDRESS = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const MULTICALL_ABI = ['function aggregate((address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)'];
 // The nine board values, read in ONE eth_call via Multicall3 (a single call
 // is far more reliable than nine parallel calls on throttled public RPCs).
-const BOARD_FNS = ['pool', 'periodId', 'periodEnd', 'ticketPrice', 'drawThreshold', 'cutActivation', 'freeMinted', 'FREE_TICKET_SUPPLY', 'ticketsSold'];
+const BOARD_FNS = ['pool', 'periodId', 'periodEnd', 'ticketPrice', 'drawThreshold', 'cutActivation', 'freeMinted', 'FREE_TICKET_SUPPLY', 'totalSupply'];
 
 async function readBoardState() {
   try {
@@ -106,7 +106,7 @@ async function readBoardState() {
       await Promise.all([
         contract.pool(), contract.periodId(), contract.periodEnd(), contract.ticketPrice(),
         contract.drawThreshold(), contract.cutActivation(), contract.freeMinted(),
-        contract.FREE_TICKET_SUPPLY(), contract.ticketsSold(),
+        contract.FREE_TICKET_SUPPLY(), contract.totalSupply(),
       ]);
     return { pool, periodId, periodEnd, ticketPrice: price, drawThreshold: threshold,
       cutActivation: cutAct, freeMinted, FREE_TICKET_SUPPLY: freeSupply, ticketsSold: sold };
