@@ -381,7 +381,7 @@ async function refreshWinners() {
   try {
     const draws = await contract.queryFilter(contract.filters.Drawn, DEPLOY_BLOCK, 'latest');
     if (draws.length === 0) {
-      box.innerHTML = '<p class="muted">No winners yet — the first draw runs when Period 1 closes (Fri 20 Nov 2026, 15:46 WIB) and the pool reaches 0.005 BNB.</p>';
+      box.innerHTML = '<p class="muted">No winners yet — the first draw runs when Period 1 closes (Fri 20 Nov 2026, 15:12 WIB) and the pool reaches 0.005 BNB.</p>';
       return;
     }
     const rows = [];
